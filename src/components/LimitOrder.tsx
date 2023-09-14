@@ -1,4 +1,4 @@
-import React, { FC, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { FC, useState, useCallback, useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useManifest, useTrader, dexterity, useProduct } from 'contexts/DexterityProviders';
 import { notify } from '../utils/notifications';
@@ -7,61 +7,71 @@ import Button from './Button';
 import { useNetworkConfiguration } from 'contexts/NetworkConfigurationProvider';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 
-export const PlaceLimitOrder: FC = () => {
-    const { publicKey } = useWallet();
-    const { manifest } = useManifest();
-    const { trader } = useTrader();
-    const { selectedProduct } = useProduct()
-    const [price, setPrice] = useState<number | null>(null);
-    const [size, setSize] = useState<number | null>(null);
-    const [orderType, setOrderType] = useState<'Long' | 'Short' | 'None'>('None');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
-    const { networkConfiguration } = useNetworkConfiguration();
-    const network = networkConfiguration as WalletAdapterNetwork;
+interface EnvVars {
+  referrerTrgDevnet: string;
+  referrerTrgMainnet: string;
+  referrerBps: string;
+}
 
-    const callbacks = {
-        onGettingBlockHashFn: () => {},
-        onGotBlockHashFn: () => {},
-        onConfirm: (txn: string) => notify({ type: 'success', message: 'Order Placed Successfully!', txid: txn })
+interface PlaceLimitOrderProps {
+  envVars: EnvVars;
+}
+
+export const PlaceLimitOrder: FC<PlaceLimitOrderProps> = ({ envVars }) => {
+  const { publicKey } = useWallet();
+  const { manifest } = useManifest();
+  const { trader } = useTrader();
+  const { selectedProduct } = useProduct();
+  const [price, setPrice] = useState<number | null>(null);
+  const [size, setSize] = useState<number | null>(null);
+  const [orderType, setOrderType] = useState<'Long' | 'Short' | 'None'>('None');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState<boolean | null>(null);
+  const { networkConfiguration } = useNetworkConfiguration();
+  const network = networkConfiguration as WalletAdapterNetwork;
+
+  const callbacks = {
+    onGettingBlockHashFn: () => {},
+    onGotBlockHashFn: () => {},
+    onConfirm: (txn: string) => notify({ type: 'success', message: 'Order Placed Successfully!', txid: txn }),
+  };
+
+  const handlePlaceOrder = useCallback(async () => {
+    if (!price || !size || !publicKey || !manifest || !selectedProduct) return;
+
+    const priceFraction = dexterity.Fractional.New(price, 0);
+    const sizeFraction = dexterity.Fractional.New(size * 10 ** selectedProduct.exponent, selectedProduct.exponent);
+    const referralTrg = network === 'devnet' ? envVars.referrerTrgDevnet : envVars.referrerTrgMainnet;
+
+    try {
+      setIsLoading(true);
+      await trader.newOrder(
+        selectedProduct.index,
+        orderType === 'Short' ? false : true,
+        priceFraction,
+        sizeFraction,
+        false,
+        new PublicKey(referralTrg),
+        Number(envVars.referrerBps),
+        null,
+        null,
+        callbacks
+      );
+      setIsSuccess(true);
+    } catch (error: any) {
+      setIsSuccess(false);
+      notify({ type: 'error', message: 'Placing order failed!', description: error?.message });
+    } finally {
+      notify({ type: 'success', message: `Limit ${orderType} Order Placed Successfully!` });
+      setIsLoading(false);
     }
+  }, [price, size, orderType, publicKey, manifest, trader, selectedProduct, envVars]);
 
-    const handlePlaceOrder = useCallback(async () => {
-        if (!price || !size || !publicKey || !manifest || !selectedProduct) return;
+  const isFormValid = useMemo(() => price !== null && size !== null && orderType !== 'None', [price, size, orderType]);
 
-        const priceFraction = dexterity.Fractional.New(price, 0);
-        const sizeFraction = dexterity.Fractional.New(size * 10 ** selectedProduct.exponent, selectedProduct.exponent);
-        const referralTrg = network === 'devnet' ? process.env.NEXT_PUBLIC_REFERRER_TRG_DEVNET! : process.env.NEXT_PUBLIC_REFERRER_TRG_MAINNET!
-
-        try {
-            setIsLoading(true);
-            await trader.newOrder(
-                selectedProduct.index,
-                orderType === 'Short' ? false : true,
-                priceFraction,
-                sizeFraction,
-                false,
-                new PublicKey(referralTrg),
-                Number(process.env.NEXT_PUBLIC_REFERRER_BPS!),
-                null,
-                null,
-                callbacks
-            );
-            setIsSuccess(true);
-        } catch (error: any) {
-            setIsSuccess(false);
-            notify({ type: 'error', message: 'Placing order failed!', description: error?.message });
-        } finally {
-            notify({ type: 'success', message: `Limit ${orderType} Order Placed Successfully!` });
-            setIsLoading(false);
-        }
-    }, [price, size, orderType, publicKey, manifest, trader, selectedProduct]);
-
-    const isFormValid = useMemo(() => price !== null && size !== null && orderType !== 'None', [price, size, orderType]);
-
-    return (
-        <div className="flex flex-col justify-center items-center border border-white rounded-lg p-4 mt-4">
-            <h1 className='text-2xl mb-4'>Place a Limit Order</h1>
+  return (
+    <div className="flex flex-col justify-center items-center border border-white rounded-lg p-4 mt-4">
+      <h1 className='text-2xl mb-4'>Place a Limit Order</h1>
 
             <div className="w-full flex flex-col items-center">
                 <label htmlFor="priceInput" className="text-xl font-semibold mb-1">Price</label>

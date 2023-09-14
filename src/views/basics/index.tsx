@@ -1,5 +1,4 @@
-
-import { FC, useEffect, useMemo } from "react";
+import { FC, useEffect, useMemo, useState } from "react";
 import { SelectTraderAccounts } from '../../components/SelectTraderAccounts';
 import { DexterityWallet } from "@hxronetwork/dexterity-ts";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -21,6 +20,22 @@ export const BasicsView: FC = ({ }) => {
   const { selectedProduct, setIndexPrice, setMarkPrice } = useProduct()
   const { networkConfiguration } = useNetworkConfiguration();
   const network = networkConfiguration as WalletAdapterNetwork;
+
+  const [envVars, setEnvVars] = useState(null);
+
+  useEffect(() => {
+    const fetchEnvVars = async () => {
+      try {
+        const res = await fetch(`/api/getEnvVars`);
+        const data = await res.json();
+        setEnvVars(data);
+      } catch (error) {
+        console.error('Error fetching environment variables:', error);
+      }
+    };
+
+    fetchEnvVars();
+  }, []);
 
   useMemo(async () => {
     if (!publicKey) return
@@ -52,10 +67,10 @@ export const BasicsView: FC = ({ }) => {
                 <ProductPrices />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <PlaceLimitOrder />
+                    {envVars && <PlaceLimitOrder envVars={envVars} />}
                   </div>
                   <div>
-                    <PlaceMarketOrder />
+                    {envVars && <PlaceMarketOrder envVars={envVars} />}
                   </div>
                 </div>
                 <div className="mt-4"><OpenOrders /></div>

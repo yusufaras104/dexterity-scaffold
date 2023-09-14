@@ -1,4 +1,4 @@
-import React, { FC, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { FC, useState, useCallback, useMemo } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useManifest, useTrader, dexterity, useProduct } from 'contexts/DexterityProviders';
 import { notify } from '../utils/notifications';
@@ -7,7 +7,17 @@ import Button from './Button';
 import { useNetworkConfiguration } from 'contexts/NetworkConfigurationProvider';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 
-export const PlaceMarketOrder: FC = () => {
+interface EnvVars {
+  referrerTrgDevnet: string;
+  referrerTrgMainnet: string;
+  referrerBps: string;
+}
+
+interface PlaceMarketOrderProps {
+  envVars: EnvVars;
+}
+
+export const PlaceMarketOrder: FC<PlaceMarketOrderProps> = ({ envVars }) => {
     const { publicKey } = useWallet();
     const { manifest } = useManifest();
     const { trader } = useTrader();
@@ -28,34 +38,34 @@ export const PlaceMarketOrder: FC = () => {
 
     const handlePlaceOrder = useCallback(async () => {
         if (!markPrice || !slippage || !size || !publicKey || !manifest || !selectedProduct) return;
-
+    
         const priceFraction = dexterity.Fractional.New(orderType === 'Short' ? markPrice - ((markPrice * slippage) / 100) : markPrice + ((markPrice * slippage) / 100), 0);
         const sizeFraction = dexterity.Fractional.New(size * 10 ** selectedProduct.exponent, selectedProduct.exponent);
-        const referralTrg = network === 'devnet' ? process.env.NEXT_PUBLIC_REFERRER_TRG_DEVNET! : process.env.NEXT_PUBLIC_REFERRER_TRG_MAINNET!
-
+        const referralTrg = network === 'devnet' ? envVars.referrerTrgDevnet : envVars.referrerTrgMainnet;
+    
         try {
-            setIsLoading(true);
-            await trader.newOrder(
-                selectedProduct.index,
-                orderType === 'Short' ? false : true,
-                priceFraction,
-                sizeFraction,
-                false,
-                new PublicKey(referralTrg),
-                Number(process.env.NEXT_PUBLIC_REFERRER_BPS!),
-                null,
-                null,
-                callbacks
-            );
-            setIsSuccess(true);
+          setIsLoading(true);
+          await trader.newOrder(
+            selectedProduct.index,
+            orderType === 'Short' ? false : true,
+            priceFraction,
+            sizeFraction,
+            false,
+            new PublicKey(referralTrg),
+            Number(envVars.referrerBps),
+            null,
+            null,
+            callbacks
+          );
+          setIsSuccess(true);
         } catch (error: any) {
-            setIsSuccess(false);
-            notify({ type: 'error', message: 'Placing order failed!', description: error?.message });
+          setIsSuccess(false);
+          notify({ type: 'error', message: 'Placing order failed!', description: error?.message });
         } finally {
-            notify({ type: 'success', message: `Market ${orderType} Order Placed Successfully!` });
-            setIsLoading(false);
+          notify({ type: 'success', message: `Market ${orderType} Order Placed Successfully!` });
+          setIsLoading(false);
         }
-    }, [slippage, size, orderType, publicKey, manifest, trader, selectedProduct, markPrice]);
+      }, [slippage, size, orderType, publicKey, manifest, trader, selectedProduct, markPrice, envVars]);
 
     const isFormValid = useMemo(() => markPrice !== null && slippage !== null && size !== null && orderType !== 'None', [slippage, size, orderType, markPrice]);
 
