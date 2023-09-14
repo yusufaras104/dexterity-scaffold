@@ -1,4 +1,4 @@
-import { FC, useEffect, useMemo, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { SelectTraderAccounts } from '../../components/SelectTraderAccounts';
 import { DexterityWallet } from "@hxronetwork/dexterity-ts";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -22,6 +22,7 @@ export const BasicsView: FC = ({ }) => {
   const network = networkConfiguration as WalletAdapterNetwork;
 
   const [envVars, setEnvVars] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchEnvVars = async () => {
@@ -30,6 +31,7 @@ export const BasicsView: FC = ({ }) => {
         const data = await res.json();
         setEnvVars(data);
       } catch (error) {
+        setError('Error fetching environment variables');
         console.error('Error fetching environment variables:', error);
       }
     };
@@ -37,20 +39,22 @@ export const BasicsView: FC = ({ }) => {
     fetchEnvVars();
   }, []);
 
-  useMemo(async () => {
-    if (!publicKey) return
-    const DexWallet: DexterityWallet = {
-      publicKey: publicKey!,
-      signTransaction,
-      signAllTransactions,
-    }
-    console.log({ DexWallet })
-    const manifest = await dexterity.getManifest(`/api/fetchManifest?network=${network}&publicKey=${publicKey}`, true, DexWallet);
-    console.log('Manifest: ', manifest)
-    setManifest(manifest);
-  }, [publicKey]);
+  useEffect(() => {
+    const fetchManifest = async () => {
+      if (!publicKey) return
+      const DexWallet: DexterityWallet = {
+        publicKey: publicKey!,
+        signTransaction,
+        signAllTransactions,
+      }
+      console.log({ DexWallet })
+      const manifest = await dexterity.getManifest(`/api/fetchManifest?network=${network}&publicKey=${publicKey}`, true, DexWallet);
+      console.log('Manifest: ', manifest)
+      setManifest(manifest);
+    };
 
-  useEffect(() => { }, [trader, setIndexPrice, setMarkPrice])
+    fetchManifest();
+  }, [publicKey]);
 
   return (
     <div className="md:hero mx-auto p-4">
@@ -61,7 +65,8 @@ export const BasicsView: FC = ({ }) => {
         <div className="text-center">
           <DefaultInfo />
           <SelectTraderAccounts />
-          {trader &&
+          {error && <p>{error}</p>}
+          {trader && !error &&
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 p-4">
               <div className="col-span-1 md:col-span-1 lg:col-span-1">
                 <ProductPrices />
